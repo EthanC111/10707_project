@@ -81,12 +81,12 @@ class training():
             log_level="info",
             save_strategy="steps",
             save_steps=200,
-            learning_rate=3e-4,#1e-4, 4e-5, 8e-5
+            learning_rate=1e-4,#3e-4, 4e-5, 8e-5
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=batch_size * 4,
             # weight_decay=0.01,
             save_total_limit=3,
-            num_train_epochs=20,
+            num_train_epochs= 15, #20
             predict_with_generate=True,
             load_best_model_at_end=True,
             metric_for_best_model="accuracy",
@@ -106,6 +106,10 @@ class training():
         )
 
         trainer.train()
+        logs = trainer.state.log_history
+        with open(log_dir + '_logs.txt', 'w') as f:
+            json.dump(logs, f)
+        pdb.set_trace()
 
 class testing():
     def __init__(self, tokenized_datasets):
@@ -117,7 +121,7 @@ class testing():
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model_name = "t5-v1_1-small-superglue-rte"
         model_dir = f"./cache/models/{model_name}"
-        model_dir = f"./cache/models/{model_name}/checkpoint-3200"
+        model_dir = f"./cache/models/{model_name}/checkpoint-6000"
         model = AutoModelForSeq2SeqLM.from_pretrained(model_dir).to(device)
         
         batch_size = 64  # set the batch size
@@ -143,7 +147,7 @@ class testing():
 
 if __name__ == "__main__":
     tokenized_train_dataset, tokenized_test_dataset = rte_dataset_loader()
-    # train_obj = training({'train': tokenized_train_dataset, 'test':tokenized_test_dataset})
-    # train_obj.train()
-    test_obj = testing({'train': tokenized_train_dataset, 'test':tokenized_test_dataset})
-    test_obj.test()
+    train_obj = training({'train': tokenized_train_dataset, 'test':tokenized_test_dataset})
+    train_obj.train()
+    # test_obj = testing({'train': tokenized_train_dataset, 'test':tokenized_test_dataset})
+    # test_obj.test()
