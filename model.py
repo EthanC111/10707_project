@@ -36,6 +36,7 @@ class GPTPromptTuningMixin:
 
         return model
 
+
     def set_soft_prompt_embeds(
         self,
         soft_prompt_path: str,
@@ -51,6 +52,7 @@ class GPTPromptTuningMixin:
         self.n_tokens = self.soft_prompt.num_embeddings
         print(f"Set soft prompt! (n_tokens: {self.n_tokens})")
 
+
     def initialize_soft_prompt(
         self,
         n_tokens: int = 20,
@@ -61,12 +63,17 @@ class GPTPromptTuningMixin:
         if initialize_from_vocab:
             init_prompt_value = self.encoder.embed_tokens.weight[:n_tokens].clone().detach()
         else:
-            init_prompt_value = torch.FloatTensor(2, 10).uniform_(
+            init_prompt_value = torch.FloatTensor(*self.encoder.embed_tokens.weight[:n_tokens].shape).uniform_(
                 -random_range, random_range
             )
-        self.soft_prompt = nn.Embedding(n_tokens, self.config.d_model)
-        # Initialize weight
+        # init_prompt_value = torch.cat([self.encoder.embed_tokens(torch.LongTensor([3, 35, 5756, 297, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))[:5],
+        #         self.encoder.embed_tokens(torch.LongTensor([59, 834, 35, 5756, 297, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))[:6]],
+        #         )
+        # init_prompt_value = torch.cat([init_prompt_value, init_prompt_value])
+
+        self.soft_prompt = nn.Embedding(init_prompt_value.shape[0], self.config.d_model)#n_tokens, self.config.d_model)
         self.soft_prompt.weight = nn.parameter.Parameter(init_prompt_value)
+
 
     def _cat_learned_embedding_to_input(self, input_ids) -> torch.Tensor:
         inputs_embeds = self.encoder.embed_tokens(input_ids)
@@ -81,6 +88,7 @@ class GPTPromptTuningMixin:
 
         return inputs_embeds
 
+
     def _extend_labels(self, labels, ignore_index=-100) -> torch.Tensor:
         if len(list(labels.shape)) == 1:
             labels = labels.unsqueeze(0)
@@ -94,6 +102,7 @@ class GPTPromptTuningMixin:
             dim=1,
         )
 
+
     def _extend_attention_mask(self, attention_mask):
 
         if len(list(attention_mask.shape)) == 1:
@@ -105,10 +114,12 @@ class GPTPromptTuningMixin:
             dim=1,
         )
 
+
     def save_soft_prompt(self, path: str, filename: str = "soft_prompt.model"):
         Path(path).mkdir(parents=True, exist_ok=True)
         torch.save(self.soft_prompt, os.path.join(path, filename))
         # print(f"Saved soft prompt: {os.path.join(path, filename)}")
+
 
     def forward(
         self,
@@ -122,10 +133,9 @@ class GPTPromptTuningMixin:
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        decoder_input_ids=None, decoder_attention_mask=None, cross_attn_head_mask=None, encoder_outputs=None, decoder_head_mask=None, decoder_inputs_embeds=None
+        decoder_input_ids=None, decoder_attention_mask=None, cross_attn_head_mask=None, encoder_outputs=None, decoder_head_mask=None, decoder_inputs_embeds=None,  gen=False, **kwargs
     ):
         if attention_mask is not None and attention_mask.shape[-1] != 512:
-            print(attention_mask.shape, decoder_input_ids, decoder_inputs_embeds, decoder_attention_mask)
             pass
         else:
             if input_ids is not None:
@@ -139,7 +149,6 @@ class GPTPromptTuningMixin:
             if attention_mask is not None:
                 attention_mask = self._extend_attention_mask(attention_mask).to(device)
 
-        # Drop most of the args for now
         return super().forward(
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
@@ -152,39 +161,59 @@ class GPTPromptTuningMixin:
         head_mask=head_mask,
         output_attentions=output_attentions,
         output_hidden_states=output_hidden_states,
-        cross_attn_head_mask=cross_attn_head_mask, encoder_outputs=encoder_outputs, decoder_head_mask=decoder_head_mask, decoder_inputs_embeds=decoder_inputs_embeds
+        cross_attn_head_mask=cross_attn_head_mask, encoder_outputs=encoder_outputs, decoder_head_mask=decoder_head_mask, decoder_inputs_embeds=decoder_inputs_embeds, **kwargs
         )
 
-    def generate(
+
+    def _prepare_encoder_decoder_kwargs_for_generation(
+        self, input_ids: torch.LongTensor, model_kwargs
+    ):
+        # retrieve encoder hidden states
+        encoder = self.get_encoder()
+        encoder_kwargs = {
+            argument: value for argument, value in model_kwargs.items() if not argument.startswith("decoder_")
+        }
+        
+        inputs_embeds = self._cat_learned_embedding_to_input(input_ids).to(
+                    device
+                )
+
+        encoder_kwargs['inputs_embeds'] = inputs_embeds
+        if encoder_kwargs['attention_mask'] is not None:
+            encoder_kwargs['attention_mask'] = self._extend_attention_mask(encoder_kwargs['attention_mask']).to(device)
+
+        model_kwargs["encoder_outputs"]: ModelOutput = encoder(return_dict=True, **encoder_kwargs)
+        return model_kwargs
+
+
+    def prepare_inputs_for_generation(
         self,
-        input_ids=None,
+        input_ids,
         past_key_values=None,
         attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
         head_mask=None,
-        inputs_embeds=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
+        decoder_head_mask=None,
+        cross_attn_head_mask=None,
         use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
-        decoder_input_ids=None, decoder_attention_mask=None, max_length=512, num_beams=5, synced_gpus=1
+        encoder_outputs=None,
+        **kwargs
     ):
-        if input_ids is not None:
-            inputs_embeds = self._cat_learned_embedding_to_input(input_ids).to(
-                device
-            )
+        # cut decoder_input_ids if past is used
+        if past_key_values is not None:
+            input_ids = input_ids[:, -1:]
 
-        if attention_mask is not None:
-            attention_mask = self._extend_attention_mask(attention_mask).to(device)
+        return {
+            "decoder_input_ids": input_ids,
+            "past_key_values": past_key_values,
+            "encoder_outputs": encoder_outputs,
+            "attention_mask": attention_mask,
+            "head_mask": head_mask,
+            "decoder_head_mask": decoder_head_mask,
+            "cross_attn_head_mask": cross_attn_head_mask,
+            "use_cache": use_cache,
+            "gen":True
+        }
 
-        # Drop most of the args for now
-        return super().generate(
-            attention_mask=attention_mask,
-            inputs_embeds=inputs_embeds, early_stopping=True, max_length=max_length
-        )
 
 class GPT2PromptTuningLM(GPTPromptTuningMixin, GPT2LMHeadModel):
     def __init__(self, config):
