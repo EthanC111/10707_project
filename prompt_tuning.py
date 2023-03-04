@@ -1,8 +1,8 @@
 from transformers import (
-    T5Tokenizer,
-    AdamW,
-    get_scheduler, DataCollatorForSeq2Seq, Seq2SeqTrainingArguments, Seq2SeqTrainer
+    T5Tokenizer, 
+    get_scheduler, DataCollatorForSeq2Seq, Seq2SeqTrainingArguments, Seq2SeqTrainer, get_constant_schedule
 )
+from transformers.optimization import Adafactor, AdafactorSchedule
 import torch
 import datasets
 import random
@@ -13,6 +13,7 @@ from datasets import load_dataset, load_metric, concatenate_datasets, Dataset, F
 from torch.utils.data import DataLoader
 
 from model import T5PromptTuningLM
+# from optimizers import get_optimizer
 
 
 
@@ -21,16 +22,16 @@ class Config:
     # https://github.com/huggingface/transformers/blob/master/examples/pytorch/language-modeling/run_clm_no_trainer.py
 
     num_train_epochs = 20
-    weight_decay = 0
-    learning_rate = 0.001
+    weight_decay = 1e-5
+    learning_rate = 0.3
     lr_scheduler_type = "linear"
     max_train_steps = num_train_epochs
     max_seq_length=512
     adam_epsilon=1e-8
-    warmup_steps=0
+    warmup_steps=500
     train_batch_size=16
     eval_batch_size=16
-    gradient_accumulation_steps=4
+    gradient_accumulation_steps=2
     n_gpu=1
     early_stop_callback=False
     fp_16=False # if you want to enable 16-bit training then install apex and set this to true
@@ -42,11 +43,13 @@ class Config:
     
     # Prompt-tuning
     # number of prompt tokens
-    n_prompt_tokens = 100
+    n_prompt_tokens = 22
     # If True, soft prompt will be initialized from vocab 
     # Otherwise, you can set `random_range` to initialize by randomization.
     init_from_vocab = True
     # random_range = 0.5
+
+
 
 def tokenize_text(text):
     encoding = tokenizer(text, padding='max_length', truncation=True, max_length=512)
@@ -55,7 +58,6 @@ def tokenize_text(text):
 def rte_dataset_loader():
     rte_dataset = load_dataset("super_glue", 'rte', cache_dir="datasets/")
     
-    # labels = torch.tensor(rte_dataset['validation']['label'])
     df_train = rte_dataset['train'].to_pandas()
     df_valid = rte_dataset['validation'].to_pandas()
 
@@ -92,12 +94,14 @@ datasets.builder.has_sufficient_disk_space = lambda needed_bytes, directory='.':
 train_dataset, eval_dataset = rte_dataset_loader()
 eval_labels = eval_dataset["output"]
 
+
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
+    print(predictions, labels[0][:20])
     decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
     count = 0
-    for j in range(len(eval_labels)):
-        if j == 0:
+    for j in range(len(decoded_preds)):
+        if j < 10:
             print(j, decoded_preds[j], eval_labels[j])
         if decoded_preds[j] == eval_labels[j]:
             count += 1
@@ -105,33 +109,34 @@ def compute_metrics(eval_pred):
 
 
 def train_trainer(args, model, train_dataset, eval_dataset, optimizer, lr_scheduler):
-    model_name = "t5-v1_1-small-superglue-rte-pt"
+    model_name = "t5-v1_1-small-rte-" + str(args.n_prompt_tokens)
+    if args.init_from_vocab:
+        model_name += "-init"
+
     model_dir = f"./cache/models/{model_name}"
     log_dir = f"./cache/logs/{model_name}"
 
     args_ = Seq2SeqTrainingArguments(
             output_dir=model_dir,
             evaluation_strategy="steps",
-            eval_steps=200,
+            eval_steps=100,
             logging_dir=log_dir,
             logging_strategy="steps",
-            logging_steps=50,
+            logging_steps=5,
             log_level="info",
             save_strategy="steps",
             save_steps=2000,
-            # learning_rate=3e-3,#1e-4, 4e-5, 8e-5
             per_device_train_batch_size=args.train_batch_size,
             per_device_eval_batch_size=args.eval_batch_size,
-            # weight_decay=0.01,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
             save_total_limit=3,
             num_train_epochs=args.num_train_epochs,
             predict_with_generate=True,
             load_best_model_at_end=True,
             metric_for_best_model="accuracy",
-            #report_to="tensorboard"
         )
 
-    data_collator = DataCollatorForSeq2Seq(tokenizer, max_length=20)
+    data_collator = DataCollatorForSeq2Seq(tokenizer, max_length=512)
 
     trainer = Seq2SeqTrainer(
             model=model,
@@ -167,10 +172,6 @@ def train(model, optimizer, lr_scheduler, dataset, batch_size, gradient_accumula
         loss = outputs.loss
         loss.backward()
 
-        # for n, m in model.named_parameters():
-        #     if m.requires_grad:
-        #         print(n, m.data)
-
         if (num_batch + 1) % gradient_accumulation_steps == 0:
             optimizer.step()  
             optimizer.zero_grad()
@@ -194,7 +195,7 @@ def eval(model, dataset, batch_size):
         batch = dataset[i:i+batch_size] 
         tensor_batch = {}
         for k, v in batch.items():
-            if k in ['input_ids', 'attention_mask']:
+            if k in ['input_ids']:
                 tensor_batch[k] = torch.tensor(v).to(device)
 
         output_ids = model.generate(**tensor_batch)
@@ -230,28 +231,32 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         model.cuda()
 
-
     optimizer_grouped_parameters = [
         {
-            "params": [p for n, p in model.named_parameters() if n == "soft_prompt.weight"],
+            "params": [p for n, p in model.named_parameters() if n == "soft_prompt.weight" or 'lm_head' in n],
             "weight_decay": args.weight_decay,
         }
     ]
     
-
+    for n, p in model.named_parameters():
+        if n == "soft_prompt.weight" or 'lm_head' in n:
+            print(n)
     
 
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
+    optimizer = Adafactor(optimizer_grouped_parameters, lr=args.learning_rate, scale_parameter=False,  relative_step=False)
+    # optimizer = Adafactor(optimizer_grouped_parameters, scale_parameter=True, relative_step=True, warmup_init=True, lr=None)
+    # lr_scheduler = AdafactorSchedule(optimizer)
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
         num_warmup_steps=args.warmup_steps,
         num_training_steps=args.max_train_steps * len(train_dataset) // args.train_batch_size,
     )
+    # lr_scheduler = get_constant_schedule(optimizer)
 
     for ep in range(args.num_train_epochs):
-        # train_trainer(args, model, train_dataset, eval_dataset, optimizer, lr_scheduler)
-        loss = train(model, optimizer, lr_scheduler, train_dataset, args.train_batch_size, args.gradient_accumulation_steps)
+        train_trainer(args, model, train_dataset, eval_dataset, optimizer, lr_scheduler)
+        # loss = train(model, optimizer, lr_scheduler, train_dataset, args.train_batch_size, args.gradient_accumulation_steps)
         acc = eval(model, eval_dataset, args.eval_batch_size)
 
         print("[Epoch " + str(ep) + "] Train Loss:", "\t Eval Acc:", acc, "\t LR:", optimizer.param_groups[0]['lr'])
