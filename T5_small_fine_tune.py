@@ -1,54 +1,16 @@
-import transformers
-from datasets import load_dataset, load_metric, concatenate_datasets, Dataset
+import argparse
+from dataset_preprocessing import dataset_loader
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, T5Tokenizer, DataCollatorForSeq2Seq, Seq2SeqTrainingArguments, Seq2SeqTrainer
-import numpy as np
 import pdb
-import pandas as pd
 import json
 
 model_checkpoint = "google/t5-v1_1-small"
 tokenizer = T5Tokenizer.from_pretrained(model_checkpoint, cache_dir="../cache/transformers/")
 
-# Define a custom function to tokenize each element in the 'text' column
-def tokenize_text(text):
-    encoding = tokenizer(text, padding='max_length', truncation=True, max_length=512)
-    return pd.Series([encoding['input_ids'], encoding['attention_mask']])
-
-def rte_dataset_loader():
-    rte_dataset = load_dataset("super_glue", 'rte', cache_dir="../cache/datasets/")
-    
-    labels = torch.tensor(rte_dataset['validation']['label'])
-    df_train = rte_dataset['train'].to_pandas()
-    df_valid = rte_dataset['validation'].to_pandas()
-
-    label_dict = {0: 'entailment', 1: 'not_entailment'}
-    df_train_list = []
-    df_valid_list = []
-
-    for i, row in df_train.iterrows():
-        df_train_list.append({"input": f"hypothesis: {row['hypothesis']} premise: {row['premise']}", "output": label_dict[row['label']]})
-    for i, row in df_valid.iterrows():
-        df_valid_list.append({"input": f"hypothesis: {row['hypothesis']} premise: {row['premise']}", "output": label_dict[row['label']]})
-    df_train = pd.DataFrame(df_train_list)
-    df_valid = pd.DataFrame(df_valid_list)
-
-    # encode the inputs and outputs
-    df_train[['input_ids', 'attention_mask']] = df_train['input'].apply(tokenize_text)
-    df_train[['labels', 'label_attention_mask']] = df_train['output'].apply(tokenize_text)
-    df_valid[['input_ids', 'attention_mask']] = df_valid['input'].apply(tokenize_text)
-    df_valid[['labels', 'label_attention_mask']] = df_valid['output'].apply(tokenize_text)
-    
-    df_train = df_train.drop('label_attention_mask', axis=1)
-    df_valid = df_valid.drop('label_attention_mask', axis=1)
-
-    dataset_train = Dataset.from_pandas(df_train)
-    dataset_valid = Dataset.from_pandas(df_valid)
-
-    return dataset_train, dataset_valid
-
 class training():
-    def __init__(self, tokenized_datasets):
+    def __init__(self, dataset_name, tokenized_datasets):
+        self.dataset_name = dataset_name
         self.tokenized_datasets = tokenized_datasets
         self.eval_labels = self.tokenized_datasets["test"]["output"]
         pass
@@ -65,11 +27,11 @@ class training():
                 count += 1
         return {"accuracy": count / len(decoded_preds)}
 
-    def train(self):
+    def run(self):
         batch_size = 8  # set the batch size
-        model_name = "t5-v1_1-small-superglue-rte"
-        model_dir = f"./cache/models/{model_name}"
-        log_dir = f"./cache/logs/{model_name}"
+        saved_model_name = "t5-v1_1-small-superglue-" + self.dataset_name
+        model_dir = f"./cache/models/{saved_model_name}"
+        log_dir = f"./cache/logs/{saved_model_name}"
 
         args = Seq2SeqTrainingArguments(
             output_dir=model_dir,
@@ -109,19 +71,20 @@ class training():
         logs = trainer.state.log_history
         with open(log_dir + '_logs.txt', 'w') as f:
             json.dump(logs, f)
-        pdb.set_trace()
+        # pdb.set_trace()
 
 class testing():
-    def __init__(self, tokenized_datasets):
+    def __init__(self, dataset_name, tokenized_datasets):
+        self.dataset_name = dataset_name
         self.tokenized_datasets = tokenized_datasets
         self.eval_labels = self.tokenized_datasets["test"]["output"]
         pass
 
-    def test(self):
+    def run(self):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model_name = "t5-v1_1-small-superglue-rte"
-        model_dir = f"./cache/models/{model_name}"
-        model_dir = f"./cache/models/{model_name}/checkpoint-6000"
+        saved_model_name = "t5-v1_1-small-superglue-" + self.dataset_name
+        model_dir = f"./cache/models/{saved_model_name}"
+        model_dir = f"./cache/models/{saved_model_name}/checkpoint-6000"
         model = AutoModelForSeq2SeqLM.from_pretrained(model_dir).to(device)
         
         batch_size = 64  # set the batch size
@@ -146,8 +109,14 @@ class testing():
 
 
 if __name__ == "__main__":
-    tokenized_train_dataset, tokenized_test_dataset = rte_dataset_loader()
-    train_obj = training({'train': tokenized_train_dataset, 'test':tokenized_test_dataset})
-    train_obj.train()
-    # test_obj = testing({'train': tokenized_train_dataset, 'test':tokenized_test_dataset})
-    # test_obj.test()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--dataset_name', choices=['boolq', 'cb', 'copa', 'multirc', 'rte', 'wic', 'wsc'], help='Name of the dataset')
+    args = parser.parse_args()
+
+    tokenized_train_dataset, tokenized_test_dataset = dataset_loader(args.dataset_name)
+
+    train_obj = training(args.dataset_name, {'train': tokenized_train_dataset, 'test':tokenized_test_dataset})
+    train_obj.run()
+    # test_obj = testing(args.dataset_name, {'train': tokenized_train_dataset, 'test':tokenized_test_dataset})
+    # test_obj.run()
