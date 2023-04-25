@@ -3,7 +3,7 @@ from transformers.optimization import AdamW, Adafactor
 
 def make_dp_optimizer_class(cls):
     class DPOptimizerClass(cls):
-        def __init__(self, l2_norm_clip, noise_multiplier, microbatch_size, num_microbatches, **kwargs):
+        def __init__(self, l2_norm_clip, noise_multiplier, microbatch_size, num_microbatches, decay, **kwargs):
             print(kwargs)
             super(DPOptimizerClass, self).__init__(**kwargs)
 
@@ -13,10 +13,12 @@ def make_dp_optimizer_class(cls):
             self.accum_grads = []
             self.step_counter = 0
             self.num_microbatches = num_microbatches
+            self.decay = decay
 
             for group in self.param_groups:
                 for param in group["params"]:
                     self.accum_grads.append(torch.zeros(*param.shape, device=param.device) if param.requires_grad else None)
+
 
         def step(self, *args, **kwargs):
             if self.step_counter == self.num_microbatches:
@@ -41,7 +43,9 @@ def make_dp_optimizer_class(cls):
                             self.accum_grads[i] += param.grad * clip_coef
                         i += 1
 
-                self.step_counter += 1 
+                self.step_counter += 1
+                print(self.step_counter)
+ 
 
         def zero_grad_super(self): 
             self.accum_grads = []          
@@ -59,6 +63,9 @@ def make_dp_optimizer_class(cls):
                         param.grad *= 1 / self.num_microbatches
                     i += 1
             super(DPOptimizerClass, self).step(*args, **kwargs)
+            if self.decay:
+                self.l2_norm_clip += 0.01 * self.l2_norm_clip
+                self.noise_multiplier -= 0.01 * self.noise_multiplier
 
     return DPOptimizerClass
 
@@ -75,7 +82,8 @@ def get_optimizer(name, config, DP_config=None):
             noise_multiplier=DP_config['noise_multiplier'],
             microbatch_size=DP_config['microbatch_size'],
             num_microbatches=DP_config['num_microbatches'],
+            decay=DP_config['decay'],
             **config)
     else:
-        opt = opt_cls(params, **config)
+        opt = opt_cls(params, lr=lr)
     return opt
